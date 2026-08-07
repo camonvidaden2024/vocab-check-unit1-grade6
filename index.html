@@ -7,7 +7,8 @@
 <style>
 body{
     font-family:"Times New Roman",serif;
-    background:linear-gradient(135deg,#F99895,#ABD5A4);
+    background: url('duck.jpg') no-repeat center center fixed;
+    background-size: cover;
     min-height:100vh;
     margin:0;
     display:flex;
@@ -17,7 +18,7 @@ body{
 .screen{
     width:85%;
     max-width:750px;
-    background:rgba(255,255,255,0.95);
+    background:rgba(255,255,255,0.9);
     padding:35px;
     border-radius:20px;
     box-shadow:0 10px 25px rgba(0,0,0,.15);
@@ -78,13 +79,26 @@ button:hover { background: #e08582; }
 #questionBox{
     font-size:38px;
     font-weight:bold;
-    margin:25px 0;
+    margin:20px 0;
 }
+
+/* Thêm style cho khung chứa ảnh câu hỏi */
+.question-image-container {
+    margin: 15px 0;
+}
+.question-image {
+    max-width: 100%;
+    max-height: 220px;
+    border-radius: 12px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    object-fit: contain;
+}
+
 .correct{background:#9ABF17 !important;color:white;}
 .wrong{background:#BA1B18 !important;color:white;}
 #feedback{
-    font-size:90px;
-    height:100px;
+    font-size:80px;
+    height:90px;
     font-weight:bold;
 }
 .correctMark{color:#9ABF17;}
@@ -100,14 +114,48 @@ th { background-color: #4A90E2; color: white; }
 tr:nth-child(even){background-color: #f9f9f9;}
 .vocab-list { max-height: 250px; overflow-y: auto; border: 1px solid #ccc; padding: 10px; background: #fff; border-radius: 8px; text-align: left; margin-bottom: 20px; }
 .vocab-item { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px dashed #eee; font-size: 18px; align-items: center;}
-.firework{
-    position:fixed;
-    font-size:40px;
-    animation:explode 2s linear forwards;
+.vocab-thumb { width: 45px; height: 45px; object-fit: cover; border-radius: 6px; margin-right: 10px; vertical-align: middle; }
+
+/* Style cho hiệu ứng bóng bay */
+.balloon {
+    position: absolute;
+    bottom: -120px;
+    width: 50px;
+    height: 65px;
+    border-radius: 50% 50% 50% 50% / 40% 40% 60% 60%;
+    z-index: 1;
+    pointer-events: none;
+    animation: floatUp linear infinite;
 }
-@keyframes explode{
-    from{transform:translateY(0);opacity:1;}
-    to{transform:translateY(-250px);opacity:0;}
+.balloon::after {
+    content: "";
+    position: absolute;
+    bottom: -8px;
+    left: 50%;
+    transform: translateX(-50%);
+    border-left: 5px solid transparent;
+    border-right: 5px solid transparent;
+    border-bottom: 8px solid inherit;
+}
+.balloon-string {
+    position: absolute;
+    bottom: -40px;
+    left: 50%;
+    width: 2px;
+    height: 40px;
+    background: rgba(0,0,0,0.15);
+    transform: translateX(-50%);
+}
+
+@keyframes floatUp {
+    0% {
+        transform: translateY(0) rotate(0deg);
+        opacity: 1;
+    }
+    100% {
+        transform: translateY(-110vh) rotate(15deg);
+        opacity: 0;
+    }
 }
 </style>
 </head>
@@ -135,19 +183,29 @@ tr:nth-child(even){background-color: #f9f9f9;}
     <div id="timer">Time Left: 60s</div>
     <div id="progressContainer"><div id="progressBar"></div></div>
     <div id="questionCounter"></div>
+    
+    <!-- Vùng hiển thị câu hỏi và hình ảnh -->
+    <div id="imageContainer" class="question-image-container hidden">
+        <img id="questionImage" class="question-image" src="" alt="Vocabulary Image">
+    </div>
     <div id="questionBox"></div>
+    
     <div id="feedback"></div>
-    <input type="text" id="answerInput" placeholder="Type your answer..." oninput="checkAnswer()">
+    <input type="text" id="answerInput" placeholder="Type your answer...">
     <br>
-    <button onclick="nextQuestion()">NEXT</button>
+    <button id="actionBtn" onclick="handleActionButton()">OK</button>
 </div>
 
-<div id="resultScreen" class="screen hidden">
-    <h2 style="font-size:48px;">CONGRATULATIONS!</h2>
-    <p style="font-size:30px;">YOU GET</p>
-    <div id="finalScore"></div>
-    <br>
-    <button onclick="location.reload()" style="background:#4A90E2;">Làm lại bài</button>
+<div id="resultScreen" class="screen hidden" style="position: relative; overflow: hidden;">
+    <canvas id="fireworksCanvas" style="position:absolute; top:0; left:0; width:100%; height:100%; pointer-events:none; z-index:1;"></canvas>
+    
+    <div style="position:relative; z-index:2;">
+        <h2 style="font-size:48px;">CONGRATULATIONS!</h2>
+        <p style="font-size:30px;">YOU GET</p>
+        <div id="finalScore"></div>
+        <br>
+        <button onclick="location.reload()" style="background:#4A90E2;">Làm lại bài</button>
+    </div>
 </div>
 
 <div id="teacherScreen" class="screen hidden">
@@ -163,8 +221,9 @@ tr:nth-child(even){background-color: #f9f9f9;}
     
     <div style="background:#eef5fc; padding:20px; border-radius:10px; text-align:left;">
         <h3 style="margin-top:0;">Thêm từ vựng mới:</h3>
-        <input type="text" id="newViet" placeholder="Nghĩa tiếng Việt (Ví dụ: cơ sở vật chất)" style="width:95%;">
-        <input type="text" id="newEng" placeholder="Các đáp án tiếng Anh - cách nhau bằng dấu phẩy (Ví dụ: facilities, infrastructure)" style="width:95%;">
+        <input type="text" id="newViet" placeholder="Nghĩa tiếng Việt (Ví dụ: lính cứu hỏa)" style="width:95%;">
+        <input type="text" id="newEng" placeholder="Các đáp án tiếng Anh - cách nhau bằng dấu phẩy (Ví dụ: firefighter)" style="width:95%;">
+        <input type="text" id="newImg" placeholder="Link/URL hình ảnh (Tùy chọn - Ví dụ: https://example.com/firefighter.jpg)" style="width:95%;">
         <button class="btn-teacher" onclick="addQuestion()" style="margin-top:10px;">Thêm Vào Hệ Thống</button>
     </div>
 
@@ -176,10 +235,10 @@ tr:nth-child(even){background-color: #f9f9f9;}
         <table>
             <thead>
                 <tr>
-                    <th>Họ và Tên</th>
-                    <th>Số lần làm bài</th>
-                    <th>Kết quả làm bài (Đúng/Tổng)</th>
-                    <th>Thời gian nộp cuối cùng</th>
+                    <th style="width: 10%;">STT</th>
+                    <th style="width: 30%;">Họ và Tên</th>
+                    <th style="width: 30%;">Kết quả lượt này (Đúng/Tổng)</th>
+                    <th style="width: 30%;">Thời gian nộp bài</th>
                 </tr>
             </thead>
             <tbody id="analyticsTableBody">
@@ -189,49 +248,52 @@ tr:nth-child(even){background-color: #f9f9f9;}
     </div>
 </div>
 
+<!-- Thẻ âm thanh -->
 <audio id="correctSound" preload="auto"><source src="correct.mp3" type="audio/mpeg"></audio>
 <audio id="wrongSound" preload="auto"><source src="wrong.mp3" type="audio/mpeg"></audio>
+<audio id="winnerSound" preload="auto"><source src="winnersound.mp3" type="audio/mpeg"></audio>
 
 <script>
 const FIREBASE_URL = "https://grade-6-vocab-check-teachers-default-rtdb.firebaseio.com"; 
 
+// Thêm thuộc tính image vào từ vựng (ví dụ minh họa)
 const defaultQuestions = [
-    {vietnamese:"cơ sở vật chất",english:"facilities"},
-    {vietnamese:"lính cứu hỏa",english:"firefighter"},
-    {vietnamese:"chuẩn bị",english:"prepare"},
-    {vietnamese:"tầm quan trọng",english:"importance"},
-    {vietnamese:"tiệc tân gia",english:"house-warming party"},
-    {vietnamese:"đặc sản địa phương",english:"speciality food"},
-    {vietnamese:"người tiêu thụ, khách hàng",english:"consumer"},
-    {vietnamese:"làm thủ công",english:"hand-craft"},
-    {vietnamese:"trung tâm thành phố",english:"city centre"},
-    {vietnamese:"hướng dẫn",english:"instruct"},
-    {vietnamese:"thợ thủ công",english:"artisan"},
-    {vietnamese:"cải thiện",english:"improve"},
-    {vietnamese:"điểm thu hút khách du lịch",english:"tourist attraction"},
-    {vietnamese:"địa phương",english:"local"},
-    {vietnamese:"nguyên bản",english:"original"},
-    {vietnamese:"cảnh sát",english:"police officer"},
-    {vietnamese:"rút ngắn",english:"shorten"},
-    {vietnamese:"người giao hàng",english:"delivery person"},
-    {vietnamese:"quạt giấy",english:"paper fan"},
-    {vietnamese:"đồ gốm",english:"pottery"},
-    {vietnamese:"chăm chỉ",english:"hard-working"},
-    {vietnamese:"va li",english:"suitcase"},
-    {vietnamese:"tài sản",english:"property"},
-    {vietnamese:"thợ điện",english:"electrician"},
-    {vietnamese:"hương thơm",english:"fragrance"},
-    {vietnamese:"đồ thủ công",english:"handicraft"},
-    {vietnamese:"dây điện",english:"electrical wires"},
-    {vietnamese:"được sản xuất hàng loạt",english:"manufactured"},
-    {vietnamese:"người thu gom rác",english:"garbage collector"},
-    {vietnamese:"phân loại",english:"sort"}
+    {vietnamese:"cơ sở vật chất", english:"facilities", image:""},
+    {vietnamese:"lính cứu hỏa", english:"firefighter", image:"https://images.unsplash.com/photo-1558611848-73f7eb4001a1?w=400"},
+    {vietnamese:"chuẩn bị", english:"prepare", image:""},
+    {vietnamese:"tầm quan trọng", english:"importance", image:""},
+    {vietnamese:"tiệc tân gia", english:"house-warming party", image:""},
+    {vietnamese:"đặc sản địa phương", english:"speciality food", image:""},
+    {vietnamese:"người tiêu thụ, khách hàng", english:"consumer", image:""},
+    {vietnamese:"làm thủ công", english:"hand-craft", image:""},
+    {vietnamese:"trung tâm thành phố", english:"city centre", image:""},
+    {vietnamese:"hướng dẫn", english:"instruct", image:""},
+    {vietnamese:"thợ thủ công", english:"artisan", image:""},
+    {vietnamese:"cải thiện", english:"improve", image:""},
+    {vietnamese:"điểm thu hút khách du lịch", english:"tourist attraction", image:""},
+    {vietnamese:"địa phương", english:"local", image:""},
+    {vietnamese:"nguyên bản", english:"original", image:""},
+    {vietnamese:"cảnh sát", english:"police officer", image:""},
+    {vietnamese:"rút ngắn", english:"shorten", image:""},
+    {vietnamese:"người giao hàng", english:"delivery person", image:""},
+    {vietnamese:"quạt giấy", english:"paper fan", image:""},
+    {vietnamese:"đồ gốm", english:"pottery", image:"https://images.unsplash.com/photo-1565193566173-7a0ee3dbe261?w=400"},
+    {vietnamese:"chăm chỉ", english:"hard-working", image:""},
+    {vietnamese:"va li", english:"suitcase", image:""},
+    {vietnamese:"tài sản", english:"property", image:""},
+    {vietnamese:"thợ điện", english:"electrician", image:""},
+    {vietnamese:"hương thơm", english:"fragrance", image:""},
+    {vietnamese:"đồ thủ công", english:"handicraft", image:""},
+    {vietnamese:"dây điện", english:"electrical wires", image:""},
+    {vietnamese:"được sản xuất hàng loạt", english:"manufactured", image:""},
+    {vietnamese:"người thu gom rác", english:"garbage collector", image:""},
+    {vietnamese:"phân loại", english:"sort", image:""}
 ];
 
 let questions = [...defaultQuestions];
-let currentQuestion=0, score=0, totalWrong=0, timeLeft=60, timer, lastState="", isPlaying=false, studentName="";
+let currentQuestion=0, score=0, totalWrong=0, timeLeft=60, timer, isPlaying=false, studentName="";
+let isChecked = false;
 
-// Hàm hỗ trợ tách chuỗi đáp án thành mảng để so khớp
 function getAcceptedAnswers(englishString) {
     if(!englishString) return [];
     return englishString.split(',').map(ans => ans.trim().toLowerCase()).filter(ans => ans !== "");
@@ -284,11 +346,25 @@ function shuffleArray(array){
     return array;
 }
 
+function unlockAudio() {
+    ['correctSound', 'wrongSound', 'winnerSound'].forEach(id => {
+        let audio = document.getElementById(id);
+        if (audio) {
+            audio.play().then(() => {
+                audio.pause();
+                audio.currentTime = 0;
+            }).catch(() => {});
+        }
+    });
+}
+
 function startGame(){
     studentName = document.getElementById("studentName").value.trim();
     if(studentName===""){alert("Please type your name!");return;}
     if(questions.length === 0) { alert("Không có câu hỏi nào để bắt đầu!"); return; }
     
+    unlockAudio();
+
     currentQuestion = 0;
     score = 0;
     totalWrong = 0;
@@ -305,69 +381,119 @@ function startTimer() {
     timer = setInterval(() => {
         timeLeft--;
         document.getElementById("timer").innerText = "Time Left: " + timeLeft + "s";
-        if (timeLeft <= 0) { clearInterval(timer); totalWrong++; nextQuestion(); }
+        if (timeLeft <= 0) { 
+            clearInterval(timer); 
+            if(!isChecked) {
+                checkAnswer();
+            } else {
+                nextQuestion(); 
+            }
+        }
     }, 1000);
 }
 
 function loadQuestion(){
     if (currentQuestion >= questions.length) { finishQuiz(); return; }
+    isChecked = false;
     document.getElementById("questionCounter").innerHTML="Question "+(currentQuestion+1)+" / "+questions.length;
-    document.getElementById("questionBox").innerHTML=questions[currentQuestion].vietnamese;
+    
+    let currentData = questions[currentQuestion];
+    let imgContainer = document.getElementById("imageContainer");
+    let imgEl = document.getElementById("questionImage");
+    
+    // Kiểm tra xem câu hỏi có ảnh hay không
+    if (currentData.image && currentData.image.trim() !== "") {
+        imgEl.src = currentData.image;
+        imgContainer.classList.remove("hidden");
+        // Nếu có ảnh, có thể gợi ý bằng tiếng Việt hoặc ẩn bớt
+        document.getElementById("questionBox").innerHTML = currentData.vietnamese ? `(${currentData.vietnamese})` : "Look at the picture and write the word:";
+    } else {
+        imgContainer.classList.add("hidden");
+        imgEl.src = "";
+        document.getElementById("questionBox").innerHTML = currentData.vietnamese;
+    }
+    
     document.getElementById("progressBar").style.width=((currentQuestion/questions.length)*100)+"%";
+    
     let input=document.getElementById("answerInput");
-    input.value=""; input.classList.remove("correct","wrong");
-    document.getElementById("feedback").innerHTML=""; lastState="";
-    input.focus(); startTimer();
+    input.value=""; 
+    input.readOnly = false;
+    input.classList.remove("correct","wrong");
+    
+    document.getElementById("feedback").innerHTML=""; 
+    document.getElementById("actionBtn").innerText = "OK";
+    
+    input.focus(); 
+    startTimer();
 }
 
-// HÀM KIỂM TRA ĐÁP ÁN: Đã nâng cấp xử lý ĐA ĐÁP ÁN
-function checkAnswer(){
-    const input=document.getElementById("answerInput");
-    const answer=input.value.trim().toLowerCase();
-    const feedback=document.getElementById("feedback");
-    if(answer===""){ input.classList.remove("correct","wrong"); feedback.innerHTML=""; return; }
+function handleActionButton() {
+    if (!isChecked) {
+        checkAnswer();
+    } else {
+        nextQuestion();
+    }
+}
 
-    // Tách danh sách các đáp án đúng được chấp nhận
+function checkAnswer(){
+    clearInterval(timer);
+    isChecked = true;
+    
+    const input = document.getElementById("answerInput");
+    input.readOnly = true;
+    const answer = input.value.trim().toLowerCase();
+    const feedback = document.getElementById("feedback");
     let validAnswers = getAcceptedAnswers(questions[currentQuestion].english);
 
-    // Học sinh gõ trúng 1 trong các đáp án hợp lệ thì tính là đúng
     if(validAnswers.includes(answer)){
-        input.classList.add("correct"); input.classList.remove("wrong");
-        feedback.innerHTML="✔"; feedback.className="correctMark";
-        if(lastState!=="correct"){ 
-            try {
-                let snd = document.getElementById("correctSound");
-                if(snd) { snd.currentTime = 0; snd.play().catch(e => {}); }
-            } catch(e){}
-            lastState="correct"; 
-        }
-    }else{
-        input.classList.add("wrong"); input.classList.remove("correct");
-        feedback.innerHTML="✖"; feedback.className="wrongMark";
-        if(lastState!=="wrong"){ 
-            try {
-                let snd = document.getElementById("wrongSound");
-                if(snd) { snd.currentTime = 0; snd.play().catch(e => {}); }
-            } catch(e){}
-            lastState="wrong"; 
-        }
+        score++;
+        input.classList.add("correct"); 
+        input.classList.remove("wrong");
+        feedback.innerHTML = "✔"; 
+        feedback.className = "correctMark";
+        playSound("correctSound");
+    } else {
+        totalWrong++;
+        input.classList.add("wrong"); 
+        input.classList.remove("correct");
+        feedback.innerHTML = "✖"; 
+        feedback.className = "wrongMark";
+        playSound("wrongSound");
     }
+    
+    document.getElementById("actionBtn").innerText = "NEXT";
+}
+
+function playSound(audioId) {
+    try {
+        let snd = document.getElementById(audioId);
+        if(snd) {
+            snd.currentTime = 0;
+            let promise = snd.play();
+            if (promise !== undefined) {
+                promise.catch(error => { console.log("Lỗi phát âm thanh:", error); });
+            }
+        }
+    } catch(e){}
 }
 
 function nextQuestion(){
     if (!isPlaying) return;
-    const answer=document.getElementById("answerInput").value.trim().toLowerCase();
-    let validAnswers = getAcceptedAnswers(questions[currentQuestion].english);
-
-    if(validAnswers.includes(answer)) { score++; } else { totalWrong++; }
     currentQuestion++;
     if(currentQuestion >= questions.length){ finishQuiz(); return; }
     loadQuestion();
 }
 
 async function sendResultToDatabase() {
-    let record = { name: studentName, correct: score, wrong: totalWrong, time: new Date().toLocaleString('vi-VN') };
-    try { await fetch(`${FIREBASE_URL}/analytics.json`, { method: 'POST', body: JSON.stringify(record) }); } catch (e) {}
+    let record = { 
+        name: studentName, 
+        correct: score, 
+        total: questions.length, 
+        time: new Date().toLocaleString('vi-VN') 
+    };
+    try { 
+        await fetch(`${FIREBASE_URL}/analytics.json`, { method: 'POST', body: JSON.stringify(record) }); 
+    } catch (e) {}
 }
 
 function finishQuiz(){
@@ -376,6 +502,8 @@ function finishQuiz(){
     sendResultToDatabase(); 
     showScreen('resultScreen');
     document.getElementById("finalScore").innerHTML=score+" / "+questions.length;
+    
+    playSound("winnerSound");
     launchFireworks();
 }
 
@@ -394,10 +522,14 @@ function renderVocabList() {
     }
     questions.forEach((q, index) => {
         let qId = q.id ? q.id : index;
-        // Hiển thị định dạng trực quan cho GV dễ nhìn thấy các từ đồng nghĩa
         let displayEng = q.english.split(',').map(t => t.trim()).join(' / ');
+        let imgTag = q.image ? `<img src="${q.image}" class="vocab-thumb" alt="thumb">` : '';
+        
         html += `<div class="vocab-item">
-            <span>${index+1}. <b>${q.vietnamese}</b>: <span style="color:#4A90E2;">${displayEng}</span></span>
+            <span style="display:flex; align-items:center;">
+                ${imgTag}
+                <span>${index+1}. <b>${q.vietnamese || "Hình ảnh"}</b>: <span style="color:#4A90E2;">${displayEng}</span></span>
+            </span>
             <button onclick="deleteQuestion('${qId}')" style="background:#BA1B18; padding:3px 10px; font-size:14px; margin:0;">Xóa</button>
         </div>`;
     });
@@ -407,11 +539,19 @@ function renderVocabList() {
 async function addQuestion() {
     let v = document.getElementById("newViet").value.trim();
     let e = document.getElementById("newEng").value.trim();
-    if(!v || !e) { alert("Vui lòng điền đủ nghĩa từ!"); return; }
+    let img = document.getElementById("newImg").value.trim();
+    
+    if(!e) { alert("Vui lòng điền ít nhất đáp án tiếng Anh!"); return; }
+    if(!v && !img) { alert("Vui lòng điền nghĩa tiếng Việt HOẶC link hình ảnh!"); return; }
+
     try {
-        // Lưu nguyên chuỗi thô chứa dấu phẩy lên Firebase
-        await fetch(`${FIREBASE_URL}/questions.json`, { method: 'POST', body: JSON.stringify({ vietnamese: v, english: e.toLowerCase() }) });
-        document.getElementById("newViet").value = ""; document.getElementById("newEng").value = "";
+        await fetch(`${FIREBASE_URL}/questions.json`, { 
+            method: 'POST', 
+            body: JSON.stringify({ vietnamese: v, english: e.toLowerCase(), image: img }) 
+        });
+        document.getElementById("newViet").value = ""; 
+        document.getElementById("newEng").value = "";
+        document.getElementById("newImg").value = "";
     } catch(err){}
     await loadQuestionsFromDatabase();
 }
@@ -441,34 +581,36 @@ async function loadAnalytics() {
         let data = await res.json();
         if(!data) { tbody.innerHTML = "<tr><td colspan='4'>Chưa có dữ liệu học sinh làm bài.</td></tr>"; return; }
         
-        let studentSummary = {};
+        let attemptsList = [];
         Object.keys(data).forEach(key => {
             let item = data[key];
             if (item && item.name) {
-                if(!studentSummary[item.name]) { 
-                    studentSummary[item.name] = { count: 0, correct: 0, wrong: 0, lastTime: "" }; 
-                }
-                let c = Number(item.correct) || 0;
-                let w = Number(item.wrong) || 0;
+                let correct = Number(item.correct) || 0;
+                let total = item.total ? Number(item.total) : (correct + (Number(item.wrong) || 0));
                 
-                studentSummary[item.name].count += 1;
-                studentSummary[item.name].correct += c; 
-                studentSummary[item.name].wrong += w;     
-                studentSummary[item.name].lastTime = item.time || "Không rõ";
+                attemptsList.push({
+                    name: item.name,
+                    correct: correct,
+                    total: total,
+                    time: item.time || "Không rõ"
+                });
             }
         });
         
+        if (attemptsList.length === 0) {
+            tbody.innerHTML = "<tr><td colspan='4'>Chưa có dữ liệu học sinh làm bài.</td></tr>"; 
+            return; 
+        }
+
         let html = "";
-        Object.keys(studentSummary).forEach(name => {
-            let s = studentSummary[name];
-            let total = s.correct + s.wrong; 
+        attemptsList.forEach((item, index) => {
             html += `<tr>
-                <td><b>${name}</b></td>
-                <td>${s.count} lần</td>
+                <td>${index + 1}</td>
+                <td><b>${item.name}</b></td>
                 <td style="color:#2C3E50; font-weight:bold;">
-                    <span style="color:#9ABF17;">${s.correct}</span> / <span>${total}</span> câu
+                    <span style="color:#9ABF17;">${item.correct}</span> / <span>${item.total}</span> câu
                 </td>
-                <td>${s.lastTime}</td>
+                <td>${item.time}</td>
             </tr>`;
         });
         tbody.innerHTML = html;
@@ -478,17 +620,112 @@ async function loadAnalytics() {
 }
 
 async function clearAnalytics() {
-    if(!confirm("Bạn có chắc chắn muốn xóa sạch lịch sử?")) return;
+    if(!confirm("Bạn có chắc chắn muốn xóa sạch lịch sử làm bài?")) return;
     try { await fetch(`${FIREBASE_URL}/analytics.json`, { method: 'DELETE' }); } catch(e){}
     loadAnalytics();
 }
 
-function launchFireworks(){
-    for(let i=0;i<40;i++){
-        const f=document.createElement("div"); f.className="firework";
-        f.innerHTML=["🎆","✨","🎉"][Math.floor(Math.random()*3)];
-        f.style.left=Math.random()*100+"vw"; f.style.top=Math.random()*100+"vh";
-        document.body.appendChild(f); setTimeout(()=>f.remove(),2000);
+function launchFireworks() {
+    createBalloons(15);
+
+    const canvas = document.getElementById('fireworksCanvas');
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    
+    const container = document.getElementById('resultScreen');
+    canvas.width = container.clientWidth;
+    canvas.height = container.clientHeight;
+
+    let particles = [];
+    const colors = ['#FF1493', '#00BFFF', '#FFD700', '#32CD32', '#FF4500', '#9400D3'];
+
+    class Particle {
+        constructor(x, y, color) {
+            this.x = x;
+            this.y = y;
+            this.color = color;
+            this.radius = Math.random() * 3 + 2;
+            const angle = Math.random() * Math.PI * 2;
+            const speed = Math.random() * 6 + 2;
+            this.vx = Math.cos(angle) * speed;
+            this.vy = Math.sin(angle) * speed;
+            this.alpha = 1;
+            this.decay = Math.random() * 0.015 + 0.008;
+        }
+
+        draw() {
+            ctx.save();
+            ctx.globalAlpha = this.alpha;
+            ctx.beginPath();
+            ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+            ctx.fillStyle = this.color;
+            ctx.fill();
+            ctx.restore();
+        }
+
+        update() {
+            this.x += this.vx;
+            this.y += this.vy;
+            this.vy += 0.05;
+            this.alpha -= this.decay;
+        }
+    }
+
+    function createExplosion(x, y) {
+        const count = 40;
+        const color = colors[Math.floor(Math.random() * colors.length)];
+        for (let i = 0; i < count; i++) {
+            particles.push(new Particle(x, y, color));
+        }
+    }
+
+    let fireworkCount = 0;
+    const interval = setInterval(() => {
+        const rx = Math.random() * (canvas.width - 100) + 50;
+        const ry = Math.random() * (canvas.height / 2) + 50;
+        createExplosion(rx, ry);
+        fireworkCount++;
+        if (fireworkCount > 8) clearInterval(interval);
+    }, 400);
+
+    function animate() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        for (let i = particles.length - 1; i >= 0; i--) {
+            particles[i].update();
+            particles[i].draw();
+            if (particles[i].alpha <= 0) {
+                particles.splice(i, 1);
+            }
+        }
+        if (particles.length > 0 || fireworkCount <= 8) {
+            requestAnimationFrame(animate);
+        }
+    }
+    animate();
+}
+
+function createBalloons(count) {
+    const container = document.getElementById('resultScreen');
+    const balloonColors = ['#FF5964', '#35A7FF', '#FFE74C', '#6BF178', '#9B51E0'];
+
+    for (let i = 0; i < count; i++) {
+        const balloon = document.createElement('div');
+        balloon.className = 'balloon';
+        
+        const color = balloonColors[Math.floor(Math.random() * balloonColors.length)];
+        balloon.style.backgroundColor = color;
+        
+        const string = document.createElement('div');
+        string.className = 'balloon-string';
+        balloon.appendChild(string);
+
+        balloon.style.left = Math.random() * 85 + 5 + '%';
+        balloon.style.animationDuration = (Math.random() * 3 + 4) + 's';
+        balloon.style.animationDelay = (Math.random() * 2) + 's';
+
+        container.appendChild(balloon);
+
+        setTimeout(() => balloon.remove(), 7000);
     }
 }
 
@@ -497,7 +734,9 @@ renderVocabList();
 loadQuestionsFromDatabase();
 
 document.addEventListener("keypress",function(e){
-    if(e.key==="Enter" && !document.getElementById("quizScreen").classList.contains("hidden")){ nextQuestion(); }
+    if(e.key==="Enter" && !document.getElementById("quizScreen").classList.contains("hidden")){ 
+        handleActionButton(); 
+    }
 });
 </script>
 </body>
