@@ -180,7 +180,7 @@ tr:nth-child(even){background-color: #f9f9f9;}
 </div>
 
 <div id="quizScreen" class="screen hidden">
-    <div id="timer">Time Left: 60s</div>
+    <div id="timer">Time Left: 30s</div>
     <div id="progressContainer"><div id="progressBar"></div></div>
     <div id="questionCounter"></div>
     
@@ -291,7 +291,7 @@ const defaultQuestions = [
 ];
 
 let questions = [...defaultQuestions];
-let currentQuestion=0, score=0, totalWrong=0, timeLeft=60, timer, isPlaying=false, studentName="";
+let currentQuestion=0, score=0, totalWrong=0, timeLeft=30, timer, isPlaying=false, studentName="";
 let isChecked = false;
 
 function getAcceptedAnswers(englishString) {
@@ -376,7 +376,7 @@ function startGame(){
 
 function startTimer() {
     clearInterval(timer);
-    timeLeft = 60;
+    timeLeft = 30;
     document.getElementById("timer").innerText = "Time Left: " + timeLeft + "s";
     timer = setInterval(() => {
         timeLeft--;
